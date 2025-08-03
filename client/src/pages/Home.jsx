@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import './Home.css'; 
 
 const Home = () => {
@@ -12,6 +12,12 @@ const Home = () => {
   const [errorMessage, setErrorMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
+  useEffect(() => {
+    if (image && canvasRef.current) {
+      drawImageOnCanvas(image);
+    }
+  }, [image]);
+
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (file) {
@@ -21,8 +27,6 @@ const Home = () => {
         img.onload = () => {
           stopCamera();
           setImage(img);
-          drawImageOnCanvas(img);
-          runDetection(img);
         };
         img.src = event.target.result;
       };
@@ -41,7 +45,19 @@ const Home = () => {
     ctx.drawImage(img, 0, 0);
   }
   };
-
+  
+  async function getCameras() {
+    const devices = await navigator.mediaDevices.enumerateDevices();
+    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+    
+    cameraSelect.innerHTML = '';
+    videoDevices.forEach((device, index) => {
+      const option = document.createElement('option');
+      option.value = device.deviceId;
+      option.textContent = device.label || `Camera ${index + 1}`;
+    });
+  }
+  
   const startCamera = () => {
     setIsCameraEnabled(true);
     navigator.mediaDevices.getUserMedia({ video: true })
@@ -63,6 +79,7 @@ const Home = () => {
       videoRef.current.srcObject.getTracks().forEach(track => track.stop());
       videoRef.current.srcObject = null;
     }
+    setIsCameraEnabled(false);
   };
 
   const captureFromCamera = () => {
@@ -81,8 +98,6 @@ const Home = () => {
         img.onload = () => {
             stopCamera();
             setImage(img);
-            drawImageOnCanvas(img);
-            runDetection(img);
         };
         img.src = tempCanvas.toDataURL('image/png');
   };
@@ -100,8 +115,36 @@ const Home = () => {
     if (canvas) {
       const ctx = canvas.getContext('2d');
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      canvas.width = 0;
+      canvas.height = 0;
     }
   };
+
+  async function sendToBackend() {
+    const name = document.getElementById('nameInput').value;
+
+    const res = await fetch('http://127.0.0.1:8000/api/greet',{
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ name })
+    });
+    const data = await res.json();
+    document.getElementById('response').textContent = data.message;
+  }
+
+  async function analyseImage() {
+    if (!image) {
+      setErrorMessage('Please upload an image or capture from camera first.');
+      return;
+    }
+    
+  }
+
+
+
+
 
   return (
     <div className='homepage'>
@@ -109,6 +152,12 @@ const Home = () => {
         <h1>Welcome to the Facial Measurement Tool</h1>
         <p>This tool helps you measure facial features</p>
       </header>
+      
+      <div className='greeting-section'>
+        <input type="text" id="nameInput" placeholder="Enter your name" />
+        <button onClick={sendToBackend}>Greet Me</button>
+        <p id="response"></p>
+      </div>
 
       <div className='home-actions'>
         <input type="file" accept="image/*" className='hidden-input' ref ={fileInputRef} onChange={handleImageUpload}/>
@@ -135,6 +184,7 @@ const Home = () => {
               <div className='video-wrapper'>
                 <video ref={videoRef} autoPlay playsInline />
               </div>
+              {/* <select id="cameraSelect"></select> */}
               <button
                 onClick={captureFromCamera}
                 disabled={isLoading}>
@@ -146,6 +196,7 @@ const Home = () => {
             {image && (
               <div className='canvas-wrapper'>
                 <canvas ref={canvasRef} className='camera-canvas' />
+                <button onClick={analyseImage}>Analyse</button>
               </div>
             )}
         </div>
@@ -154,4 +205,4 @@ const Home = () => {
   )
 }
 
-export default Home
+export default Home;
